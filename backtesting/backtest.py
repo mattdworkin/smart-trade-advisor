@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from datetime import timedelta
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple, Any, Optional
 from .metrics import calculate_metrics
 
 class DataHandler:
@@ -15,7 +15,7 @@ class DataHandler:
         df = self._add_technical_indicators(df)
         return df
 
-class Backtester:
+class Backtest:
     def __init__(self, model, initial_capital: float = 100000):
         self.model = model
         self.initial_capital = initial_capital

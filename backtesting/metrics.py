@@ -1,6 +1,8 @@
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np 
+import pandas as pd 
+from typing import Dict, List, Tuple, Any, Optional 
+ 
+ 
 
 def calculate_metrics(results: Dict) -> pd.DataFrame:
     returns = results['returns']

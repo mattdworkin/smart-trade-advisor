@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup  # For S&P 500 ticker scraping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import pandas_validator as pv
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -170,6 +171,79 @@ class HistoricalDataFetcher:
                 except Exception as e:
                     logging.error(f"Failed to process ticker batch: {e}")
         return results
+
+    def fetch_intraday_data(self, symbol, interval='15m', days=1):
+        """
+        Fetch intraday data for a given symbol
+        
+        Args:
+            symbol: Stock symbol to fetch data for
+            interval: Time interval ('1m', '5m', '15m', '30m', '60m')
+            days: Number of days of history (max 7 for 5m+)
+            
+        Returns:
+            DataFrame with intraday price data
+        """
+        logging.info(f"Fetching {interval} intraday data for {symbol}")
+        
+        try:
+            # Limit days based on interval (Yahoo restrictions)
+            if interval == '1m' and days > 7:
+                days = 7
+            elif interval in ['5m', '15m', '30m', '60m'] and days > 60:
+                days = 60
+            
+            # Calculate period string
+            period = f"{days}d"
+            
+            # Fetch data
+            ticker = yf.Ticker(symbol)
+            data = ticker.history(period=period, interval=interval)
+            
+            # Convert column names to lowercase
+            data.columns = [col.lower() for col in data.columns]
+            
+            if not data.empty:
+                logging.info(f"Fetched {len(data)} {interval} bars for {symbol}")
+                return data
+            else:
+                logging.warning(f"No intraday data returned for {symbol}")
+                return None
+            
+        except ImportError:
+            logging.warning("yfinance not installed, returning simulated intraday data")
+            
+            # Generate simulated intraday data
+            periods = 78 if interval == '5m' else 26  # Typical number of bars in a trading day
+            dates = pd.date_range(end=datetime.now(), periods=periods, freq=interval)
+            
+            base_price = np.random.uniform(50, 500)
+            volatility = np.random.uniform(0.002, 0.008)  # Intraday volatility
+            
+            # Generate price movement with some persistence
+            returns = np.random.normal(0, volatility, periods)
+            # Add some momentum/mean-reversion
+            for i in range(1, len(returns)):
+                returns[i] = 0.7 * returns[i] + 0.3 * returns[i-1]
+                
+            # Convert to prices
+            closes = base_price * np.exp(np.cumsum(returns))
+            
+            # Create OHLC data
+            df = pd.DataFrame({
+                'open': closes * np.random.uniform(0.999, 1.001, periods),
+                'high': closes * np.random.uniform(1.001, 1.003, periods),
+                'low': closes * np.random.uniform(0.997, 0.999, periods),
+                'close': closes,
+                'volume': np.random.normal(1e5, 2e4, periods).astype(int)
+            }, index=dates)
+            
+            logging.info(f"Generated simulated {interval} data for {symbol}")
+            return df
+        
+        except Exception as e:
+            logging.error(f"Error fetching intraday data for {symbol}: {e}")
+            return None
 
 def main():
     parser = argparse.ArgumentParser(description='Fetch historical stock data')

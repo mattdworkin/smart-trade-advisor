@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Trade Advisor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+            background-color: #f5f8fa;
+        }
+        .card {
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            background-color: #052c65;
+            color: white;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+        }
+        .positive {
+            color: #28a745;
+        }
+        .negative {
+            color: #dc3545;
+        }
+        .suggestion-card {
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        .suggestion-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Smart Trade Advisor</h1>
+            <div>
+                <button id="startBtn" class="btn btn-success me-2">Start System</button>
+                <button id="stopBtn" class="btn btn-danger">Stop System</button>
+            </div>
+        </header>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Trade Suggestions</h5>
+                        <button id="analyzeBtn" class="btn btn-primary btn-sm">Run Analysis</button>
+                    </div>
+                    <div class="card-body">
+                        <div id="suggestions" class="row">
+                            <p class="text-center">No suggestions available. Run analysis to generate trade ideas.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Portfolio Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <h4>Cash: <span id="cashAmount" class="text-primary">$0.00</span></h4>
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Shares</th>
+                                    <th>Avg Price</th>
+                                    <th>Current Price</th>
+                                    <th>Value</th>
+                                    <th>P/L</th>
+                                </tr>
+                            </thead>
+                            <tbody id="portfolioTable">
+                                <!-- Portfolio data will be displayed here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Recent Trades</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentTrades">
+                            <p class="text-center">No recent trades.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Manual Trade</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="manualTradeForm">
+                            <div class="mb-3">
+                                <label for="symbol" class="form-label">Symbol</label>
+                                <input type="text" class="form-control" id="symbol" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="action" class="form-label">Action</label>
+                                <select class="form-select" id="action" required>
+                                    <option value="BUY">Buy</option>
+                                    <option value="SELL">Sell</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="quantity" class="form-label">Quantity</label>
+                                <input type="number" class="form-control" id="quantity" min="1" step="1" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="reason" class="form-label">Reason</label>
+                                <textarea class="form-control" id="reason" rows="2"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Execute Trade</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for trade confirmation -->
+    <div class="modal fade" id="tradeModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Trade</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to execute this trade?</p>
+                    <p id="tradeDetails" class="fw-bold"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmTradeBtn">Execute Trade</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // DOM elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const suggestionsDiv = document.getElementById('suggestions');
+        const cashAmount = document.getElementById('cashAmount');
+        const portfolioTable = document.getElementById('portfolioTable');
+        const recentTrades = document.getElementById('recentTrades');
+        const manualTradeForm = document.getElementById('manualTradeForm');
+        const tradeModal = new bootstrap.Modal(document.getElementById('tradeModal'));
+        const tradeDetails = document.getElementById('tradeDetails');
+        const confirmTradeBtn = document.getElementById('confirmTradeBtn');
+        
+        // System state
+        let systemRunning = false;
+        let currentTrade = null;
+
+        // Event listeners
+        startBtn.addEventListener('click', startSystem);
+        stopBtn.addEventListener('click', stopSystem);
+        analyzeBtn.addEventListener('click', runAnalysis);
+        manualTradeForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            prepareManualTrade();
+        });
+        confirmTradeBtn.addEventListener('click', executeTrade);
+
+        // Initial data load
+        loadPortfolio();
+        loadRecentTrades();
+
+        // Functions
+        function startSystem() {
+            fetch('/start', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        systemRunning = true;
+                        alert('System started successfully');
+                    }
+                })
+                .catch(error => console.error('Error starting system:', error));
+        }
+
+        function stopSystem() {
+            fetch('/stop', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        systemRunning = false;
+                        alert('System stopped successfully');
+                    }
+                })
+                .catch(error => console.error('Error stopping system:', error));
+        }
+
+        function runAnalysis() {
+            if (!systemRunning) {
+                alert('Please start the system first');
+                return;
+            }
+            
+            suggestionsDiv.innerHTML = '<p class="text-center">Analyzing market data...</p>';
+            
+            fetch('/analysis', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        if (data.count === 0) {
+                            suggestionsDiv.innerHTML = '<p class="text-center">No trade suggestions generated for current market conditions.</p>';
+                        } else {
+                            displaySuggestions(data.suggestions);
+                        }
+                    }
+                })
+                .catch(error => console.error('Error running analysis:', error));
+        }
+
+        function displaySuggestions(suggestions) {
+            suggestionsDiv.innerHTML = '';
+            
+            suggestions.forEach(suggestion => {
+                const card = document.createElement('div');
+                card.className = 'col-md-6 mb-3';
+                card.innerHTML = `
+                    <div class="card suggestion-card">
+                        <div class="card-body">
+                            <h5 class="card-title">${suggestion.action} ${suggestion.quantity} ${suggestion.symbol}</h5>
+                            <p class="card-text">
+                                <strong>Strategy:</strong> ${suggestion.strategy}<br>
+                                <strong>Confidence:</strong> ${(suggestion.confidence * 100).toFixed(1)}%<br>
+                                <strong>Reason:</strong> ${suggestion.reason}
+                            </p>
+                            <button class="btn btn-sm btn-outline-primary execute-btn">Execute</button>
+                        </div>
+                    </div>
+                `;
+                suggestionsDiv.appendChild(card);
+                
+                // Add click handler
+                const executeBtn = card.querySelector('.execute-btn');
+                executeBtn.addEventListener('click', function() {
+                    prepareTrade(suggestion);
+                });
+            });
+        }
+
+        function loadPortfolio() {
+            fetch('/portfolio')
+                .then(response => response.json())
+                .then(data => {
+                    cashAmount.textContent = `$${data.cash.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    
+                    portfolioTable.innerHTML = '';
+                    data.positions.forEach(position => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${position.symbol}</td>
+                            <td>${position.shares}</td>
+                            <td>$${position.average_price.toFixed(2)}</td>
+                            <td>$${position.current_price.toFixed(2)}</td>
+                            <td>$${position.current_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td class="${position.profit_loss >= 0 ? 'positive' : 'negative'}">
+                                $${position.profit_loss.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                (${position.profit_loss_pct.toFixed(2)}%)
+                            </td>
+                        `;
+                        portfolioTable.appendChild(row);
+                    });
+                })
+                .catch(error => console.error('Error loading portfolio:', error));
+        }
+
+        function loadRecentTrades() {
+            fetch('/trades')
+                .then(response => response.json())
+                .then(trades => {
+                    if (trades.length === 0) {
+                        recentTrades.innerHTML = '<p class="text-center">No recent trades found.</p>';
+                        return;
+                    }
+                    
+                    recentTrades.innerHTML = '';
+                    trades.forEach(trade => {
+                        const date = new Date(trade.timestamp);
+                        const tradeDiv = document.createElement('div');
+                        tradeDiv.className = 'mb-2 p-2 border-bottom';
+                        tradeDiv.innerHTML = `
+                            <p class="mb-1"><strong>${trade.action}</strong> ${trade.quantity} ${trade.symbol} @ $${trade.price.toFixed(2)}</p>
+                            <small class="text-muted">${date.toLocaleString()} · ${trade.strategy}</small>
+                        `;
+                        recentTrades.appendChild(tradeDiv);
+                    });
+                })
+                .catch(error => console.error('Error loading trades:', error));
+        }
+
+        function prepareManualTrade() {
+            const trade = {
+                symbol: document.getElementById('symbol').value.toUpperCase(),
+                action: document.getElementById('action').value,
+                quantity: document.getElementById('quantity').value,
+                reason: document.getElementById('reason').value,
+                strategy: 'Manual'
+            };
+            
+            prepareTrade(trade);
+        }
+
+        function prepareTrade(trade) {
+            currentTrade = trade;
+            tradeDetails.textContent = `${trade.action} ${trade.quantity} ${trade.symbol}`;
+            tradeModal.show();
+        }
+
+        function executeTrade() {
+            if (!currentTrade) return;
+            
+            fetch('/execute_trade', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(currentTrade)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    tradeModal.hide();
+                    alert(`Trade executed successfully! ID: ${data.trade_id}`);
+                    
+                    // Reset form if it was a manual trade
+                    if (currentTrade.strategy === 'Manual') {
+                        manualTradeForm.reset();
+                    }
+                    
+                    // Refresh data
+                    loadPortfolio();
+                    loadRecentTrades();
+                }
+            })
+            .catch(error => {
+                console.error('Error executing trade:', error);
+                alert('Error executing trade. Please try again.');
+            });
+        }
+
+        // Refresh data periodically
+        setInterval(loadPortfolio, 60000); // Every minute
+    </script>
+</body>
+</html> 
