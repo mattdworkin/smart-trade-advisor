@@ -1,115 +1,136 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
-import json
-import datetime
-from main import SmartTradeAdvisor
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
 
-app = Flask(__name__)
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
-# Initialize the advisor
-advisor = SmartTradeAdvisor()
+from smart_trade_agent.agent.orchestrator import AgentOrchestrator
+from smart_trade_agent.config import get_settings
+from smart_trade_agent.models import (
+    AgentQueryRequest,
+    AgentQueryResponse,
+    DashboardPayload,
+    IngestRequest,
+    UserRole,
+)
+from smart_trade_agent.services.graph_service import GRAPHITI_AVAILABLE
 
-@app.route('/')
-def index():
-    """Main dashboard page"""
-    return render_template('index.html')
+logger = logging.getLogger("smart_trade_agent")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
 
-@app.route('/start', methods=['POST'])
-def start_system():
-    """Start the trading system"""
-    advisor.start()
-    return jsonify({"status": "success", "message": "System started successfully"})
+settings = get_settings()
+orchestrator = AgentOrchestrator(settings)
+scheduler: Optional[BackgroundScheduler] = None
 
-@app.route('/stop', methods=['POST'])
-def stop_system():
-    """Stop the trading system"""
-    advisor.stop()
-    return jsonify({"status": "success", "message": "System stopped successfully"})
 
-@app.route('/analysis', methods=['POST'])
-def run_analysis():
-    """Run analysis and get trade suggestions"""
-    suggestions = advisor.run_analysis_cycle()
-    return jsonify({
-        "status": "success", 
-        "count": len(suggestions),
-        "suggestions": suggestions
-    })
+def _parse_role(value: Optional[str]) -> Optional[UserRole]:
+    if not value:
+        return None
+    try:
+        return UserRole(value)
+    except ValueError:
+        return None
 
-@app.route('/execute_trade', methods=['POST'])
-def execute_trade():
-    """Execute a trade"""
-    data = request.json
-    trade = {
-        "symbol": data.get("symbol"),
-        "action": data.get("action"),
-        "quantity": float(data.get("quantity", 0)),
-        "strategy": data.get("strategy", "Manual"),
-        "reason": data.get("reason", "User initiated")
-    }
-    
-    result = advisor.execute_trade(trade)
-    return jsonify({
-        "status": "success",
-        "trade_id": result.get("trade_id"),
-        "executed_price": result.get("executed_price")
-    })
 
-@app.route('/portfolio')
-def get_portfolio():
-    """Get current portfolio data"""
-    portfolio = advisor.current_portfolio
-    
-    # Calculate current values
-    positions_with_values = []
-    for symbol, pos in portfolio.get('positions', {}).items():
-        current_price = advisor.realtime_stream.get_last_price(symbol) or pos.get('average_price', 0)
-        current_value = pos.get('shares', 0) * current_price
-        cost_basis = pos.get('shares', 0) * pos.get('average_price', 0)
-        profit_loss = current_value - cost_basis
-        profit_loss_pct = 100 * profit_loss / cost_basis if cost_basis > 0 else 0
-        
-        positions_with_values.append({
-            "symbol": symbol,
-            "shares": pos.get('shares', 0),
-            "average_price": pos.get('average_price', 0),
-            "current_price": current_price,
-            "current_value": current_value,
-            "profit_loss": profit_loss,
-            "profit_loss_pct": profit_loss_pct
-        })
-    
-    return jsonify({
-        "cash": portfolio.get('cash', 0),
-        "positions": positions_with_values
-    })
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global scheduler
+    orchestrator.initialize()
+    try:
+        orchestrator.refresh_market_intelligence()
+    except Exception as exc:  # pragma: no cover - network/storage availability varies
+        logger.exception("Initial refresh failed: %s", exc)
 
-@app.route('/trades')
-def get_trades():
-    """Get recent trades"""
-    days = int(request.args.get('days', 7))
-    today = datetime.date.today()
-    start_date = today - datetime.timedelta(days=days)
-    
-    trades = advisor.trade_journaler.get_trades_by_date(
-        start_date=start_date,
-        end_date=today
+    if settings.enable_background_refresh:
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(
+            orchestrator.refresh_market_intelligence,
+            trigger="interval",
+            seconds=settings.refresh_interval_seconds,
+            coalesce=True,
+            max_instances=1,
+        )
+        scheduler.start()
+    try:
+        yield
+    finally:
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
+        orchestrator.close()
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
+base_dir = Path(__file__).resolve().parent
+app.mount("/static", StaticFiles(directory=str(base_dir / "static")), name="static")
+templates = Jinja2Templates(directory=str(base_dir / "templates"))
+
+
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "refresh_interval_seconds": settings.refresh_interval_seconds,
+        },
     )
-    
-    trade_data = []
-    for trade in trades:
-        trade_data.append({
-            "trade_id": trade.trade_id,
-            "timestamp": trade.timestamp.isoformat(),
-            "symbol": trade.symbol,
-            "action": trade.action,
-            "quantity": trade.quantity,
-            "price": trade.price,
-            "total_value": trade.total_value,
-            "strategy": trade.strategy_name,
-            "notes": trade.notes
-        })
-    
-    return jsonify(trade_data)
 
-if __name__ == '__main__':
-    app.run(debug=True) 
+
+@app.get("/api/health")
+def healthcheck():
+    return {
+        "status": "ok",
+        "background_refresh": settings.enable_background_refresh,
+        "last_refresh_at": orchestrator.last_refresh_at.isoformat() if orchestrator.last_refresh_at else None,
+        "graphiti_available": GRAPHITI_AVAILABLE,
+    }
+
+
+@app.get("/api/dashboard", response_model=DashboardPayload)
+def dashboard(request: Request, role: Optional[UserRole] = None):
+    user_id = request.headers.get("x-user-id", "guest")
+    header_role = _parse_role(request.headers.get("x-user-role"))
+    context = orchestrator.resolve_user_context(
+        user_id=user_id,
+        explicit_role=role or header_role,
+    )
+    return orchestrator.get_dashboard(context)
+
+
+@app.post("/api/query", response_model=AgentQueryResponse)
+def query_agent(payload: AgentQueryRequest, request: Request):
+    user_id = request.headers.get("x-user-id", "guest")
+    header_role = _parse_role(request.headers.get("x-user-role"))
+    context = orchestrator.resolve_user_context(
+        user_id=user_id,
+        explicit_role=payload.role or header_role,
+        question=payload.question,
+    )
+    return orchestrator.answer_question(payload.question, context)
+
+
+@app.post("/api/knowledge/documents")
+def ingest_documents(payload: IngestRequest):
+    result = orchestrator.ingest_documents(payload.documents)
+    return {"status": "ok", **result}
+
+
+@app.get("/api/graph/{symbol}")
+def graph_relationships(symbol: str, limit: int = 20):
+    return {"symbol": symbol.upper(), "relationships": orchestrator.get_relationships(symbol, limit)}
+
+
+@app.post("/api/refresh", response_model=DashboardPayload)
+def refresh_now():
+    return orchestrator.refresh_market_intelligence()
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=settings.debug)

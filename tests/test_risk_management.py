@@ -1,47 +1,48 @@
-import unittest
-import numpy as np
-from trading.risk_management import RiskManager, PositionSizing
+from datetime import datetime, timezone
 
-class TestRiskManagement(unittest.TestCase):
-    def setUp(self):
-        self.risk_manager = RiskManager()
-        self.position_sizer = PositionSizing()
-    
-    def test_kelly_criterion(self):
-        # Test with 60% win rate and 2:1 win/loss ratio
-        size = self.position_sizer.kelly_criterion(win_rate=0.6, win_loss_ratio=2.0)
-        self.assertGreaterEqual(size, 0)
-        self.assertLessEqual(size, 1)
-    
-    def test_percent_risk_sizing(self):
-        capital = 100000
-        max_risk = 0.01
-        entry = 100
-        stop = 95
-        
-        size = self.position_sizer.percent_risk_sizing(
-            capital=capital,
-            max_risk_percent=max_risk,
-            entry_price=entry,
-            stop_price=stop
-        )
-        
-        expected = (capital * max_risk) / (entry - stop)
-        self.assertEqual(size, expected)
-    
-    def test_calculate_var(self):
-        # Generate sample returns
-        np.random.seed(42)
-        returns = np.random.normal(0.0005, 0.01, 1000)
-        
-        # Calculate 95% VaR
-        var_95 = self.risk_manager.calculate_var(returns, confidence_level=0.95)
-        
-        # VaR should be positive (representing a loss)
-        self.assertGreater(var_95, 0)
-        # 99% VaR should be greater than 95% VaR
-        var_99 = self.risk_manager.calculate_var(returns, confidence_level=0.99)
-        self.assertGreater(var_99, var_95)
+from smart_trade_agent.models import DashboardPayload, PredictionCard, UserRole
+from smart_trade_agent.services.implementation_layer import ImplementationLayer
+from smart_trade_agent.services.profile_service import ProfileService
 
-if __name__ == '__main__':
-    unittest.main() 
+
+def test_profile_service_infers_pro_trader_role():
+    service = ProfileService()
+    context = service.resolve(
+        user_id="u-1",
+        explicit_role=None,
+        question="I need intraday scalp setups before the open.",
+    )
+    assert context.role == UserRole.PRO_TRADER
+
+
+def test_implementation_layer_generates_role_specific_action():
+    implementation = ImplementationLayer()
+    dashboard = DashboardPayload(
+        generated_at=datetime.now(timezone.utc),
+        winners=[
+            PredictionCard(
+                symbol="NVDA",
+                expected_return_1d=2.4,
+                expected_return_30d=7.1,
+                confidence=0.82,
+            )
+        ],
+        losers=[
+            PredictionCard(
+                symbol="XOM",
+                expected_return_1d=-1.4,
+                expected_return_30d=-3.2,
+                confidence=0.66,
+            )
+        ],
+    )
+    context = ProfileService().resolve("user-pro", explicit_role=UserRole.PRO_TRADER)
+    actions = implementation.build_actions(
+        user_context=context,
+        dashboard=dashboard,
+        question="Execute implementation plan.",
+        sources_used=[],
+    )
+    action_types = {action.action_type for action in actions}
+    assert "set_intraday_alerts" in action_types
+    assert "create_paper_trade_plan" in action_types

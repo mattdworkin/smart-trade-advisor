@@ -1,33 +1,75 @@
-# Smart Trade Advisor
+# Smart Trade Advisor: Agentic Market Research Platform
 
-An algorithmic trading recommendation system that analyzes market data and suggests trades based on various strategies.
+This project is now a role-aware AI market research agent designed for the morning trading workflow.
 
-## Features
+It routes each question to the most useful sources (market data, NYT headlines, vector knowledge, and company relationship graph), then produces a personalized answer and an automated implementation action plan.
 
-- Portfolio management and visualization
-- Real-time and historical market data integration
-- Algorithmic trade recommendations
-- Risk management and compliance tracking
-- Performance analysis and backtesting
-- Trade journaling and audit trail
+## What It Does
 
-## Installation
+- Uses a source-routing agent to decide where to fetch evidence.
+- Stores and searches knowledge docs in Neon Postgres with `pgvector`.
+- Builds/query company-stock relationships in Neo4j (with Graphiti-compatible architecture).
+- Pulls daily New York Times business coverage and generates brief summaries.
+- Produces continuously refreshed predictions:
+  - biggest winners predicted
+  - biggest losers predicted
+  - best long-term setups
+  - high-attention watchlist
+- Adapts output and action planning by user role (`retail`, `pro_trader`, `advisor`, `executive`).
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/smart-trade-advisor.git
-   cd smart-trade-advisor
-   ```
+## Architecture
 
-2. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+- `app.py`: FastAPI app + scheduler + API routes + UI serving
+- `smart_trade_agent/agent/orchestrator.py`: central reasoning/orchestration
+- `smart_trade_agent/agent/source_router.py`: source selection logic
+- `smart_trade_agent/services/vector_store.py`: Neon pgvector ingest/search
+- `smart_trade_agent/services/graph_service.py`: Neo4j relationship ingest/query
+- `smart_trade_agent/services/news_service.py`: NYT API/RSS ingest + summary
+- `smart_trade_agent/services/prediction_service.py`: ranking engine for winners/losers/long-term/watchlist
+- `smart_trade_agent/services/profile_service.py`: role and intent adaptation
+- `smart_trade_agent/services/implementation_layer.py`: action generation for implementation workflows
+- `infrastructure/sql/neon_pgvector.sql`: Neon schema setup (extensions + tables + indexes)
 
-3. Configure API keys in `config.json`
+## Quick Start
 
-## Usage
+1. Install dependencies:
 
-### Command Line Interface
+```bash
+pip install -r requirements.txt
+```
 
-Run the application with the CLI:
+2. Configure environment:
+
+```bash
+copy .env.example .env
+```
+
+3. Fill `.env` with:
+- `NEON_DATABASE_URL` for pgvector
+- `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`
+- `NYT_API_KEY`
+- `OPENAI_API_KEY` (optional but recommended)
+
+4. Run:
+
+```bash
+python app.py
+```
+
+Open `http://localhost:8000`.
+
+## API Endpoints
+
+- `GET /api/dashboard`
+- `POST /api/query`
+- `POST /api/knowledge/documents`
+- `GET /api/graph/{symbol}`
+- `POST /api/refresh`
+- `GET /api/health`
+
+## Notes
+
+- If OpenAI is not configured, embeddings and answer synthesis use deterministic fallback logic.
+- If Neo4j is not configured, graph operations run in memory.
+- If NYT API key is not configured, NYT RSS is used.
+- Legacy modules from the previous architecture were archived under `legacy_archive/` to keep the active stack focused.

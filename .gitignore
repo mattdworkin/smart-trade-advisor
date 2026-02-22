@@ -25,6 +25,11 @@ venv/
 env/
 ENV/
 
+# Local secrets
+.env
+.env.*
+!.env.example
+
 # Logs
 logs/
 *.log

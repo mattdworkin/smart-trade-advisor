@@ -1,16 +1,18 @@
-import unittest
-import numpy as np
-from models.model_trainer import ModelTrainer
+from smart_trade_agent.agent.source_router import SourceRouter
+from smart_trade_agent.models import SourceType
 
-class TestModels(unittest.TestCase):
-    def setUp(self):
-        self.model_trainer = ModelTrainer()
-    
-    def test_model_initialization(self):
-        # Basic test to ensure model trainer can be initialized
-        self.assertIsNotNone(self.model_trainer)
-        
-    # Add more specific tests when model implementations are completed
 
-if __name__ == '__main__':
-    unittest.main() 
+def test_source_router_uses_graph_for_relationship_questions():
+    router = SourceRouter()
+    decisions = router.route("Show relationship exposure between NVDA and cloud providers.")
+    decision_types = {decision.source for decision in decisions}
+    assert SourceType.GRAPH in decision_types
+    assert SourceType.MARKET in decision_types or SourceType.NEWS in decision_types
+
+
+def test_source_router_defaults_to_market_and_news():
+    router = SourceRouter()
+    decisions = router.route("What should I focus on before the open?")
+    decision_types = {decision.source for decision in decisions}
+    assert SourceType.MARKET in decision_types
+    assert SourceType.NEWS in decision_types

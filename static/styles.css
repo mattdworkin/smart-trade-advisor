@@ -1,0 +1,256 @@
+:root {
+  --bg-a: #f3efe3;
+  --bg-b: #d9ecff;
+  --ink: #15253f;
+  --muted: #4b5d77;
+  --panel: #fffdfa;
+  --line: #d4dbe6;
+  --accent: #dc5f00;
+  --rise: #1d8f52;
+  --fall: #c63d2f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: "Space Grotesk", sans-serif;
+  background:
+    radial-gradient(circle at 6% 10%, rgba(220, 95, 0, 0.22), transparent 35%),
+    radial-gradient(circle at 95% 90%, rgba(23, 137, 84, 0.18), transparent 38%),
+    linear-gradient(155deg, var(--bg-a), var(--bg-b));
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+h1 {
+  font-family: "Source Serif 4", serif;
+  font-size: clamp(2rem, 4vw, 3.1rem);
+  line-height: 1.1;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin-bottom: 0.85rem;
+}
+
+.shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.2rem 1rem 2.2rem;
+}
+
+.hero {
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, #fff9f0, #f6fbff);
+  border-radius: 18px;
+  padding: 1.1rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  box-shadow: 0 22px 42px rgba(21, 37, 63, 0.08);
+}
+
+.eyebrow {
+  margin: 0 0 0.45rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.subtitle {
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+  max-width: 55ch;
+}
+
+.hero-controls {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  min-width: 180px;
+}
+
+.hero-controls label {
+  font-size: 0.77rem;
+  color: var(--muted);
+}
+
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+select,
+textarea {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  background: #ffffff;
+}
+
+button {
+  border: 0;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  padding: 0.64rem 0.8rem;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(0.94);
+}
+
+.kpi-row {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.kpi-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.72rem 0.85rem;
+  background: var(--panel);
+}
+
+.kpi-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.kpi-card h3 {
+  margin-top: 0.25rem;
+  font-size: 1.08rem;
+}
+
+.grid {
+  margin-top: 0.95rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.grid.two-col {
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.95rem;
+  background: var(--panel);
+  box-shadow: 0 15px 30px rgba(21, 37, 63, 0.06);
+}
+
+.card-list,
+.headline-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.signal-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0.65rem 0.75rem;
+}
+
+.signal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.signal-head strong {
+  font-size: 1rem;
+}
+
+.signal-head span {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.up {
+  color: var(--rise);
+}
+
+.down {
+  color: var(--fall);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.headline-item {
+  border-left: 3px solid var(--accent);
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+}
+
+.headline-item a {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.headline-item p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+#queryForm {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
+}
+
+.agent-answer {
+  border: 1px solid var(--line);
+  background: #fbfdff;
+  border-radius: 11px;
+  padding: 0.7rem;
+  min-height: 95px;
+  margin-bottom: 0.8rem;
+  white-space: pre-wrap;
+}
+
+#actionList {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid,
+  .grid.two-col {
+    grid-template-columns: 1fr;
+  }
+}

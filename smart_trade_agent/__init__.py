@@ -1,0 +1,2 @@
+"""Smart Trade Agent package."""
+
