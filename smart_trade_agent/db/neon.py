@@ -25,7 +25,11 @@ class NeonStore:
             raise RuntimeError("Neon database URL is not configured.")
         conn = psycopg.connect(self.dsn, autocommit=True)
         if register_vector is not None:
-            register_vector(conn)
+            try:
+                register_vector(conn)
+            except psycopg.ProgrammingError:
+                # First-time setup can hit this before CREATE EXTENSION vector runs.
+                pass
         try:
             yield conn
         finally:
@@ -54,4 +58,3 @@ class NeonStore:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(sql, params)
                 return list(cur.fetchall())
-

@@ -50,7 +50,7 @@ class VectorStore:
             """
             params = []
             for doc, embedding in zip(documents, embeddings):
-                doc_id = doc.id or str(uuid.uuid4())
+                doc_id = self._normalize_doc_id(doc.id)
                 params.append(
                     (
                         doc_id,
@@ -66,7 +66,7 @@ class VectorStore:
             return count
 
         for doc, embedding in zip(documents, embeddings):
-            normalized = doc.model_copy(update={"id": doc.id or str(uuid.uuid4())})
+            normalized = doc.model_copy(update={"id": self._normalize_doc_id(doc.id)})
             self._memory.append((normalized, embedding))
             count += 1
         return count
@@ -120,3 +120,10 @@ class VectorStore:
             return 0.0
         return dot / (norm_a * norm_b)
 
+    def _normalize_doc_id(self, raw_id: str | None) -> str:
+        if not raw_id:
+            return str(uuid.uuid4())
+        try:
+            return str(uuid.UUID(raw_id))
+        except (ValueError, TypeError):
+            return str(uuid.uuid5(uuid.NAMESPACE_URL, str(raw_id)))

@@ -66,7 +66,7 @@ function renderCards(container, cards, key) {
 function renderNews(items) {
   dashboardTargets.nyt.innerHTML = "";
   if (!items || items.length === 0) {
-    dashboardTargets.nyt.textContent = "No NYT briefing available.";
+    dashboardTargets.nyt.textContent = "No market news briefing available.";
     return;
   }
   items.forEach((item) => {

@@ -71,7 +71,7 @@ class AgentOrchestrator:
 
     def refresh_market_intelligence(self) -> DashboardPayload:
         with self._refresh_lock:
-            news_items = self.news_service.fetch_daily_nyt(limit=20)
+            news_items = self.news_service.fetch_daily_market_news(limit=20)
             documents = [
                 KnowledgeDocumentInput(
                     id=item.id,
@@ -219,7 +219,7 @@ class AgentOrchestrator:
             )
         if "news" in evidence and dashboard.nyt_briefing:
             headlines = ", ".join(item.title for item in dashboard.nyt_briefing[:3])
-            lines.append(f"NYT drivers: {headlines}.")
+            lines.append(f"News drivers: {headlines}.")
         if "graph" in evidence:
             symbols = ", ".join(list(evidence["graph"].keys()))  # type: ignore[union-attr]
             lines.append(f"Relationship graph was consulted for: {symbols}.")
@@ -278,7 +278,7 @@ class AgentOrchestrator:
     def _bootstrap_documents(self) -> List[KnowledgeDocumentInput]:
         return [
             KnowledgeDocumentInput(
-                id="boot-risk-playbook",
+                id="2d3f1808-df4d-4628-9445-02b33b8d5b6a",
                 source="system",
                 title="Risk Guardrails",
                 content=(
@@ -288,7 +288,7 @@ class AgentOrchestrator:
                 metadata={"symbols": ["SPY", "QQQ"]},
             ),
             KnowledgeDocumentInput(
-                id="boot-relationship-playbook",
+                id="d6a7e22b-9f54-4ce7-8523-2914df95b95c",
                 source="system",
                 title="Cross-Asset Relationship Heuristics",
                 content=(
@@ -298,4 +298,3 @@ class AgentOrchestrator:
                 metadata={"symbols": ["NVDA", "MSFT", "AMZN", "AAPL", "GOOGL"]},
             ),
         ]
-

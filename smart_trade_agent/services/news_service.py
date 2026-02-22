@@ -32,11 +32,85 @@ class NewsService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def fetch_daily_nyt(self, limit: int = 10) -> List[NewsItem]:
-        items = self._fetch_from_nyt_api(limit=limit) if self.settings.nyt_api_key else []
-        if items:
-            return items
-        return self._fetch_from_nyt_rss(limit=limit)
+    def fetch_daily_market_news(self, limit: int = 10) -> List[NewsItem]:
+        provider = (self.settings.news_provider or "auto").lower().strip()
+
+        if provider in {"auto", "newsapi_ai"} and self.settings.newsapi_ai_key:
+            try:
+                items = self._fetch_from_newsapi_ai(limit=limit)
+                if items:
+                    return items
+            except Exception:
+                # Fall through to NYT providers for resilience.
+                pass
+
+        if provider in {"auto", "nyt"}:
+            items = self._fetch_from_nyt_api(limit=limit) if self.settings.nyt_api_key else []
+            if items:
+                return items
+            return self._fetch_from_nyt_rss(limit=limit)
+
+        return []
+
+    def _fetch_from_newsapi_ai(self, limit: int) -> List[NewsItem]:
+        # NewsAPI.ai is Event Registry under the hood.
+        payload = {
+            "apiKey": self.settings.newsapi_ai_key,
+            "query": {
+                "$query": {
+                    "$and": [
+                        {"lang": "eng"},
+                        {
+                            "$or": [
+                                {"keyword": "stock market"},
+                                {"keyword": "equities"},
+                                {"keyword": "earnings"},
+                                {"keyword": "federal reserve"},
+                                {"keyword": "inflation"},
+                                {"keyword": "S&P 500"},
+                            ]
+                        },
+                    ]
+                }
+            },
+            "resultType": "articles",
+            "articlesSortBy": "date",
+            "articlesCount": limit,
+            "includeArticleSocialScore": False,
+        }
+        response = requests.post(
+            self.settings.newsapi_ai_endpoint,
+            json=payload,
+            timeout=20,
+        )
+        response.raise_for_status()
+        data = response.json()
+        raw_items = ((data.get("articles") or {}).get("results") or [])
+
+        items: List[NewsItem] = []
+        for article in raw_items[:limit]:
+            title = str(article.get("title") or "Untitled")
+            body = str(article.get("body") or article.get("summary") or "")
+            summary = self._short_summary(body or title)
+            published_at = self._parse_datetime(
+                str(article.get("dateTime") or article.get("date") or "")
+            )
+            url = str(article.get("url") or "")
+            source = self._event_registry_source(article)
+            content = f"{title}. {body}"
+            items.append(
+                NewsItem(
+                    id=self._stable_id(str(article.get("uri") or url or title)),
+                    source=source,
+                    title=title,
+                    url=url,
+                    published_at=published_at,
+                    summary=summary,
+                    sentiment=self._sentiment_score(content),
+                    symbols=self._extract_symbols(content),
+                )
+            )
+        return items
 
     def _fetch_from_nyt_api(self, limit: int) -> List[NewsItem]:
         section = self.settings.nyt_section.lower().strip() or "business"
@@ -148,3 +222,11 @@ class NewsService:
 
     def _strip_html(self, html: str) -> str:
         return BeautifulSoup(html, "html.parser").get_text(" ", strip=True)
+
+    def _event_registry_source(self, article: dict) -> str:
+        source = article.get("source")
+        if isinstance(source, dict):
+            source_title = source.get("title") or source.get("uri")
+            if source_title:
+                return str(source_title)
+        return "newsapi_ai"

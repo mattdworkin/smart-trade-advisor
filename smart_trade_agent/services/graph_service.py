@@ -68,24 +68,28 @@ class GraphService:
         left = left_symbol.upper()
         right = right_symbol.upper()
         if self._driver is not None:
-            query = """
-                MERGE (a:Entity {symbol: $left})
-                MERGE (b:Entity {symbol: $right})
-                MERGE (a)-[r:RELATED_TO {kind: $kind}]->(b)
-                SET r.source = $source,
-                    r.confidence = $confidence,
-                    r.updated_at = datetime()
-            """
-            with self._driver.session() as session:
-                session.run(
-                    query,
-                    left=left,
-                    right=right,
-                    kind=relationship_kind,
-                    source=source,
-                    confidence=confidence,
-                )
-            return
+            try:
+                query = """
+                    MERGE (a:Entity {symbol: $left})
+                    MERGE (b:Entity {symbol: $right})
+                    MERGE (a)-[r:RELATED_TO {kind: $kind}]->(b)
+                    SET r.source = $source,
+                        r.confidence = $confidence,
+                        r.updated_at = datetime()
+                """
+                with self._driver.session() as session:
+                    session.run(
+                        query,
+                        left=left,
+                        right=right,
+                        kind=relationship_kind,
+                        source=source,
+                        confidence=confidence,
+                    )
+                return
+            except Exception:
+                self.close()
+                self._driver = None
 
         edge = {
             "left": left,
@@ -100,16 +104,20 @@ class GraphService:
     def query_relationships(self, symbol: str, limit: int = 20) -> List[Dict[str, object]]:
         needle = symbol.upper()
         if self._driver is not None:
-            query = """
-                MATCH (a:Entity)-[r:RELATED_TO]-(b:Entity)
-                WHERE a.symbol = $needle
-                RETURN a.symbol AS left, b.symbol AS right, r.kind AS kind, r.source AS source,
-                       r.confidence AS confidence
-                LIMIT $limit
-            """
-            with self._driver.session() as session:
-                records = session.run(query, needle=needle, limit=limit)
-                return [record.data() for record in records]
+            try:
+                query = """
+                    MATCH (a:Entity)-[r:RELATED_TO]-(b:Entity)
+                    WHERE a.symbol = $needle
+                    RETURN a.symbol AS left, b.symbol AS right, r.kind AS kind, r.source AS source,
+                           r.confidence AS confidence
+                    LIMIT $limit
+                """
+                with self._driver.session() as session:
+                    records = session.run(query, needle=needle, limit=limit)
+                    return [record.data() for record in records]
+            except Exception:
+                self.close()
+                self._driver = None
 
         results = [
             edge
@@ -123,17 +131,21 @@ class GraphService:
         upper_symbols = [symbol.upper() for symbol in symbols]
 
         if self._driver is not None:
-            query = """
-                MATCH (a:Entity)-[r:RELATED_TO]-()
-                WHERE a.symbol = $symbol
-                RETURN count(r) AS edge_count
-            """
-            with self._driver.session() as session:
-                for symbol in upper_symbols:
-                    record = session.run(query, symbol=symbol).single()
-                    edge_count = float(record["edge_count"]) if record else 0.0
-                    scores[symbol] = edge_count
-            return self._normalize_scores(scores, upper_symbols)
+            try:
+                query = """
+                    MATCH (a:Entity)-[r:RELATED_TO]-()
+                    WHERE a.symbol = $symbol
+                    RETURN count(r) AS edge_count
+                """
+                with self._driver.session() as session:
+                    for symbol in upper_symbols:
+                        record = session.run(query, symbol=symbol).single()
+                        edge_count = float(record["edge_count"]) if record else 0.0
+                        scores[symbol] = edge_count
+                return self._normalize_scores(scores, upper_symbols)
+            except Exception:
+                self.close()
+                self._driver = None
 
         for symbol in upper_symbols:
             edge_count = sum(
@@ -162,4 +174,3 @@ class GraphService:
         # Common words that frequently appear in headlines but are not tickers.
         filtered = {token for token in symbols if token not in {"THE", "AND", "FOR", "WITH", "FROM"}}
         return sorted(filtered)
-

@@ -1,8 +1,8 @@
 from functools import lru_cache
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -28,10 +28,13 @@ class Settings(BaseSettings):
 
     nyt_api_key: Optional[str] = None
     nyt_section: str = "business"
+    newsapi_ai_key: Optional[str] = None
+    newsapi_ai_endpoint: str = "https://eventregistry.org/api/v1/article/getArticles"
+    news_provider: str = "auto"
 
     refresh_interval_seconds: int = 900
     enable_background_refresh: bool = True
-    market_universe: List[str] = Field(
+    market_universe: Annotated[List[str], NoDecode] = Field(
         default_factory=lambda: [
             "AAPL",
             "MSFT",
@@ -59,4 +62,3 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-
